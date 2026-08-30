@@ -109,10 +109,18 @@ If `$CLAUDE_PLUGIN_ROOT` is not set (standalone skill install), use the absolute
 python ~/.claude/skills/nanobanana/scripts/generate.py "ENHANCED_PROMPT_HERE"
 ```
 
+Gemini is the default provider. When the user has configured
+`ATLASCLOUD_API_KEY` (or `ATLAS_CLOUD_API_KEY`), text-to-image requests can opt
+into Atlas Cloud:
+
+```bash
+python "$CLAUDE_PLUGIN_ROOT/scripts/generate.py" "ENHANCED_PROMPT_HERE" --provider atlas
+```
+
 The script will:
-1. Validate the GEMINI_API_KEY environment variable exists (auto-installing the
-   `google-genai` dependency on first run if needed)
-2. Call the Gemini API with the enhanced prompt
+1. Validate the selected provider's API key (auto-installing the `google-genai`
+   dependency on first Gemini use if needed)
+2. Call the selected image API with the enhanced prompt
 3. Save the generated image to the current directory
 4. Print the filename of the saved image
 
@@ -132,6 +140,9 @@ existing image:
   consistent, or transfer a style. The prompt then describes the desired change.
 - `--fast` — use the faster, cheaper Flash model for quick drafts/iteration.
   Default (omit it) uses Nano Banana Pro for best text and fidelity.
+- `--provider <gemini|atlas>` — select the API provider. Gemini is the default.
+  Atlas uses `google/nano-banana-pro/text-to-image-developer` and supports
+  text-to-image only; do not combine it with `--image` or `--fast`.
 
 **Examples:**
 
@@ -182,10 +193,16 @@ python "$CLAUDE_PLUGIN_ROOT/scripts/generate.py" "Put the product from the first
    pip install -r "$CLAUDE_PLUGIN_ROOT/requirements.txt"
    ```
 
+3. Optional: to use the Atlas Cloud text-to-image provider, set one of:
+   ```bash
+   export ATLASCLOUD_API_KEY="your-key-here"
+   export ATLAS_CLOUD_API_KEY="your-key-here"
+   ```
+
 ## Error Handling
 
 The script handles common errors:
-- Missing GEMINI_API_KEY (exits with clear message)
+- Missing provider API key (exits with a clear message)
 - API failures (network issues, invalid requests)
 - Image download failures
 - File write permissions

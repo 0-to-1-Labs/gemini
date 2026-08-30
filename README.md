@@ -15,7 +15,7 @@ The skill automatically transforms your requests into optimized prompts that exp
 /plugin install nanobanana@0to1-labs
 ```
 
-Then set your API key:
+Then set your Gemini API key:
 
 1. Get one at [Google AI Studio](https://aistudio.google.com/apikey)
 2. Add to your shell config:
@@ -67,6 +67,22 @@ wallpaper", "render it at 4K"), and the skill wires that to the model's aspect
 ratio and resolution controls. Add "make a quick draft" to use the faster, cheaper
 Flash model instead of Pro.
 
+### Optional Atlas Cloud provider
+
+Gemini remains the default provider. For text-to-image generation, the script
+can instead use Atlas Cloud's Nano Banana Pro model without adding another
+Python dependency:
+
+```bash
+export ATLASCLOUD_API_KEY="your-key-here"
+python scripts/generate.py "A studio product photo" --provider atlas --aspect-ratio 1:1 --resolution 2K
+```
+
+`ATLAS_CLOUD_API_KEY` is also accepted. The Atlas model used by default is
+`google/nano-banana-pro/text-to-image-developer`. This route is text-to-image
+only, so `--image` and `--fast` remain Gemini-only options. Atlas generation
+requests are submitted once; only status checks use bounded transient retries.
+
 ## Overview
 
 Nano Banana Pro is a reasoning-based model. It does best with natural language descriptions, not keyword soup. This skill handles the translation:
@@ -112,18 +128,24 @@ If you prefer not to run the install script:
 3. It builds an enhanced prompt with all the details Nano Banana Pro needs
 4. The image generates and saves to your current directory
 
-Images are saved as `nanobanana_YYYYMMDD_HHMMSS.png` in your current directory.
+Images are saved as `nanobanana_YYYYMMDD_HHMMSS.<format>` in your current
+directory. The suffix matches the image bytes returned by the selected provider.
 
-By default it uses **Nano Banana Pro** (`gemini-3-pro-image`) for the best text
-rendering and fidelity. Quick drafts can use the faster, cheaper Flash model
-(`gemini-3.1-flash-image`). All generated images carry an invisible
-[SynthID](https://deepmind.google/technologies/synthid/) watermark.
+By default it uses Gemini's **Nano Banana Pro** (`gemini-3-pro-image`) for the
+best text rendering and fidelity. Quick drafts can use the faster, cheaper
+Flash model (`gemini-3.1-flash-image`). Gemini-generated images carry an
+invisible [SynthID](https://deepmind.google/technologies/synthid/) watermark.
 
 ## Troubleshooting
 
 **"GEMINI_API_KEY not set"**
 
 Make sure it's exported in your shell. Check with `echo $GEMINI_API_KEY`. If it's empty, add it to your `.zshrc` or `.bashrc` and restart your terminal.
+
+**"ATLASCLOUD_API_KEY ... is not set"**
+
+Set `ATLASCLOUD_API_KEY` (or `ATLAS_CLOUD_API_KEY`) before using
+`--provider atlas`. No Atlas key is required for the default Gemini provider.
 
 **"google-genai not installed"**
 

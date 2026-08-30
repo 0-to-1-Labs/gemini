@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Nano Banana Pro Image Generator
-Generates and edits images using Google's Gemini 3 Pro Image model via the
-Gemini API.
+Generates and edits images with Gemini, with Atlas Cloud as an optional
+text-to-image provider.
 
 Usage:
     python generate.py "An enhanced prompt describing the image"
@@ -13,9 +13,13 @@ Usage:
 
 import argparse
 import importlib
+import json
 import os
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
@@ -23,6 +27,9 @@ from pathlib import Path
 DEFAULT_MODEL = "gemini-3-pro-image"
 # Nano Banana (Flash, GA). Faster and cheaper, good for drafts/iteration.
 FAST_MODEL = "gemini-3.1-flash-image"
+ATLAS_API_ROOT = "https://api.atlascloud.ai"
+ATLAS_MODEL = "google/nano-banana-pro/text-to-image-developer"
+ATLAS_USER_AGENT = "nanobanana/1.0"
 
 ASPECT_RATIOS = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"]
 RESOLUTIONS = ["1K", "2K", "4K"]
@@ -94,6 +101,136 @@ def validate_api_key():
         print("\nGet your API key at: https://aistudio.google.com/apikey")
         sys.exit(1)
     return api_key
+
+
+def validate_atlas_api_key():
+    """Return the Atlas Cloud API key from either supported variable name."""
+    api_key = os.getenv("ATLASCLOUD_API_KEY") or os.getenv("ATLAS_CLOUD_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "ATLASCLOUD_API_KEY (or ATLAS_CLOUD_API_KEY) is not set."
+        )
+    return api_key
+
+
+def _atlas_request(path, api_key=None, payload=None):
+    """Build an Atlas request with headers that also work behind its CDN."""
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": ATLAS_USER_AGENT,
+    }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    data = None
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+        data = json.dumps(payload).encode("utf-8")
+    return urllib.request.Request(
+        f"{ATLAS_API_ROOT}{path}", data=data, headers=headers
+    )
+
+
+def _atlas_json_request(request, transient_retries=0):
+    """Read JSON, retrying only when the caller explicitly permits it."""
+    for attempt in range(transient_retries + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            transient = exc.code == 429 or 500 <= exc.code < 600
+            if not transient or attempt == transient_retries:
+                detail = exc.read().decode("utf-8", errors="replace")[:300]
+                raise RuntimeError(f"Atlas API HTTP {exc.code}: {detail}") from exc
+        except urllib.error.URLError as exc:
+            if attempt == transient_retries:
+                raise RuntimeError(f"Atlas API network error: {exc.reason}") from exc
+        time.sleep(min(2 ** attempt, 4))
+
+
+def _atlas_data(response):
+    """Unwrap Atlas' standard response envelope when present."""
+    if isinstance(response, dict) and isinstance(response.get("data"), (dict, list)):
+        return response["data"]
+    return response
+
+
+def validate_atlas_model(model):
+    """Confirm the requested image model is currently available in the catalog."""
+    catalog = _atlas_data(
+        _atlas_json_request(_atlas_request("/api/v1/models"), transient_retries=2)
+    )
+    match = next(
+        (item for item in catalog if item.get("model") == model),
+        None,
+    )
+    if not match or not match.get("display_console", True):
+        raise RuntimeError(f"Atlas model is not currently available: {model}")
+    if "TEXT-TO-IMAGE" not in match.get("categories", []):
+        raise RuntimeError(f"Atlas model is not a text-to-image model: {model}")
+
+
+def _image_suffix(content):
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if content.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+        return ".webp"
+    raise RuntimeError("Atlas output is not a recognized PNG, JPEG, or WebP image.")
+
+
+def _download_atlas_image(url):
+    request = urllib.request.Request(url, headers={"User-Agent": ATLAS_USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            content = response.read()
+    except (urllib.error.HTTPError, urllib.error.URLError) as exc:
+        raise RuntimeError(f"Could not download Atlas output: {exc}") from exc
+    return content, _image_suffix(content)
+
+
+def generate_atlas_image(prompt, model, aspect_ratio=None, resolution=None):
+    """Generate one image through Atlas Cloud without retrying the paid POST."""
+    api_key = validate_atlas_api_key()
+    validate_atlas_model(model)
+    payload = {"model": model, "prompt": prompt}
+    if aspect_ratio:
+        payload["aspect_ratio"] = aspect_ratio
+    if resolution:
+        payload["resolution"] = resolution.lower()
+
+    print(f"Generating image with Atlas Cloud ({model})...")
+    created = _atlas_data(
+        _atlas_json_request(
+            _atlas_request("/api/v1/model/generateImage", api_key, payload),
+            transient_retries=0,
+        )
+    )
+    request_id = created.get("id") if isinstance(created, dict) else None
+    if not request_id:
+        raise RuntimeError("Atlas generation response did not include a request id.")
+
+    for poll_number in range(60):
+        prediction = _atlas_data(
+            _atlas_json_request(
+                _atlas_request(f"/api/v1/model/prediction/{request_id}", api_key),
+                transient_retries=2,
+            )
+        )
+        status = prediction.get("status", "").lower()
+        if status in {"completed", "succeeded", "success"}:
+            outputs = prediction.get("outputs") or []
+            if not outputs:
+                raise RuntimeError("Atlas generation completed without an output URL.")
+            print("Image generated successfully!")
+            return _download_atlas_image(outputs[0])
+        if status in {"failed", "canceled", "cancelled"}:
+            raise RuntimeError(
+                prediction.get("error") or f"Atlas generation ended with status: {status}"
+            )
+        if poll_number < 59:
+            time.sleep(3)
+    raise RuntimeError("Atlas generation timed out while waiting for completion.")
 
 
 def load_reference_images(paths):
@@ -206,11 +343,11 @@ def generate_image(prompt, model, aspect_ratio=None, resolution=None, reference_
         return None
 
 
-def save_image(image, output_dir="."):
+def save_image(image, output_dir=".", suffix=".png"):
     """Save the generated image to a timestamped PNG file."""
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"nanobanana_{timestamp}.png"
+        filename = f"nanobanana_{timestamp}{suffix}"
         filepath = Path(output_dir) / filename
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
@@ -238,9 +375,15 @@ def save_image(image, output_dir="."):
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(
-        description="Generate or edit images with Nano Banana Pro (Gemini 3 Pro Image).",
+        description="Generate or edit images with Nano Banana Pro.",
     )
     parser.add_argument("prompt", nargs="+", help="The enhanced image prompt.")
+    parser.add_argument(
+        "--provider",
+        choices=["gemini", "atlas"],
+        default="gemini",
+        help="Image provider. Gemini remains the default.",
+    )
     parser.add_argument(
         "--fast",
         action="store_true",
@@ -275,6 +418,19 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
+def resolve_options(args):
+    """Resolve provider-specific options without changing Gemini defaults."""
+    if args.provider == "atlas":
+        if args.fast:
+            raise ValueError("--fast is only available with the Gemini provider.")
+        if args.image:
+            raise ValueError(
+                "The Atlas text-to-image provider does not support --image."
+            )
+        return args.model or ATLAS_MODEL
+    return args.model or (FAST_MODEL if args.fast else DEFAULT_MODEL)
+
+
 def main():
     args = parse_args()
 
@@ -283,20 +439,37 @@ def main():
         print("ERROR: Prompt cannot be empty.")
         sys.exit(1)
 
-    model = args.model or (FAST_MODEL if args.fast else DEFAULT_MODEL)
-    reference_images = load_reference_images(args.image)
+    try:
+        model = resolve_options(args)
+    except ValueError as exc:
+        print(f"ERROR: {exc}")
+        sys.exit(2)
 
-    image = generate_image(
-        prompt,
-        model=model,
-        aspect_ratio=args.aspect_ratio,
-        resolution=args.resolution,
-        reference_images=reference_images,
-    )
+    suffix = ".png"
+    if args.provider == "atlas":
+        try:
+            image, suffix = generate_atlas_image(
+                prompt,
+                model=model,
+                aspect_ratio=args.aspect_ratio,
+                resolution=args.resolution,
+            )
+        except RuntimeError as exc:
+            print(f"ERROR: {exc}")
+            sys.exit(1)
+    else:
+        reference_images = load_reference_images(args.image)
+        image = generate_image(
+            prompt,
+            model=model,
+            aspect_ratio=args.aspect_ratio,
+            resolution=args.resolution,
+            reference_images=reference_images,
+        )
     if image is None:
         sys.exit(1)
 
-    filepath = save_image(image, output_dir=args.output_dir)
+    filepath = save_image(image, output_dir=args.output_dir, suffix=suffix)
     if filepath is None:
         sys.exit(1)
 
