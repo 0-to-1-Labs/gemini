@@ -100,10 +100,10 @@ Use this modular structure (plain text, no markdown):
 After creating the enhanced prompt, generate the image using:
 
 ```bash
-python "$CLAUDE_PLUGIN_ROOT/scripts/generate.py" "ENHANCED_PROMPT_HERE"
+python "${CLAUDE_PLUGIN_ROOT}/scripts/generate.py" "ENHANCED_PROMPT_HERE"
 ```
 
-If `$CLAUDE_PLUGIN_ROOT` is not set (standalone skill install), use the absolute path:
+If the path above is not resolved (standalone skill install), use the absolute path:
 
 ```bash
 python ~/.claude/skills/nanobanana/scripts/generate.py "ENHANCED_PROMPT_HERE"
@@ -137,13 +137,13 @@ existing image:
 
 ```bash
 # A 9:16 phone wallpaper at 2K
-python "$CLAUDE_PLUGIN_ROOT/scripts/generate.py" "ENHANCED_PROMPT" --aspect-ratio 9:16 --resolution 2K
+python "${CLAUDE_PLUGIN_ROOT}/scripts/generate.py" "ENHANCED_PROMPT" --aspect-ratio 9:16 --resolution 2K
 
 # Edit an existing photo
-python "$CLAUDE_PLUGIN_ROOT/scripts/generate.py" "Replace the background with a snowy mountain range at golden hour, keep the subject unchanged" --image portrait.png
+python "${CLAUDE_PLUGIN_ROOT}/scripts/generate.py" "Replace the background with a snowy mountain range at golden hour, keep the subject unchanged" --image portrait.png
 
 # Combine two reference images
-python "$CLAUDE_PLUGIN_ROOT/scripts/generate.py" "Put the product from the first image onto the marble countertop from the second image, studio lighting" --image product.png --image kitchen.png
+python "${CLAUDE_PLUGIN_ROOT}/scripts/generate.py" "Put the product from the first image onto the marble countertop from the second image, studio lighting" --image product.png --image kitchen.png
 ```
 
 ## Examples
@@ -179,7 +179,7 @@ python "$CLAUDE_PLUGIN_ROOT/scripts/generate.py" "Put the product from the first
    (`google-genai`, and `pillow` when editing reference images) on first run.
    To install them ahead of time:
    ```bash
-   pip install -r "$CLAUDE_PLUGIN_ROOT/requirements.txt"
+   pip install -r "${CLAUDE_PLUGIN_ROOT}/requirements.txt"
    ```
 
 ## Error Handling

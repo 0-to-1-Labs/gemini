@@ -12,7 +12,7 @@ The skill automatically transforms your requests into optimized prompts that exp
 
 ```
 /plugin marketplace add 0-to-1-Labs/claude-marketplace
-/plugin install nanobanana@0to1-labs
+/plugin install nanobanana@0-to-1-labs
 ```
 
 Then set your API key:
