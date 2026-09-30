@@ -1,7 +1,7 @@
 {
   "name": "nanobanana",
   "displayName": "Nano Banana Pro",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Generate and edit photorealistic images with perfect text rendering using Nano Banana Pro (Gemini 3 Pro Image). Auto-enhances prompts and supports aspect ratio, resolution, and reference-image editing.",
   "author": {
     "name": "John P. Sasser"
