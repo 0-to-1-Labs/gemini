@@ -35,8 +35,27 @@ Then set your API key:
    ```
 3. Restart Claude Code
 
-Python 3.10 or later is required. The scripts install `google-genai` on first
-run. To install ahead of time: `pip install -r requirements.txt`.
+Python 3.10 or later is required. On first run the scripts create a private
+virtual environment at `~/.cache/claude-gemini-plugin/venv` (or under
+`$CLAUDE_PLUGIN_DATA` when set) and install `google-genai` into it. They never
+change your system or Homebrew Python.
+
+## Keep the plugin updated
+
+Claude Code can update this plugin automatically. Auto-update is off by default for third-party marketplaces, so turn it on once:
+
+1. Run `/plugin`.
+2. Open the **Marketplaces** tab and select `0-to-1-labs`.
+3. Choose **Enable auto-update**.
+
+Claude Code then checks for new versions after each session start and installs them. Restart Claude Code to load an update.
+
+To update by hand:
+
+```
+claude plugin marketplace update 0-to-1-labs
+claude plugin update gemini@0-to-1-labs
+```
 
 ## Usage
 
@@ -135,12 +154,11 @@ Version 2.0.0 renames the plugin from `nanobanana` to `gemini`.
 `GOOGLE_API_KEY` also works.
 
 **"google-genai not installed" or too old** — the scripts need
-`google-genai>=2.3.0`. Install it with
-`pip install --user --upgrade google-genai` (add `--break-system-packages` on
-Homebrew Python).
+`google-genai>=2.3.0`. Delete `~/.cache/claude-gemini-plugin/venv` and re-run;
+the script rebuilds it.
 
 **"incompatible architecture" on import** — a package was built for another
-CPU. Reinstall it: `pip install --user --force-reinstall <package>`.
+CPU. Delete `~/.cache/claude-gemini-plugin/venv` and re-run.
 
 **API errors** — check the key at [Google AI Studio](https://aistudio.google.com/apikey).
 Image, video, and music calls fail on a key without billing.

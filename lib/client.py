@@ -2,17 +2,30 @@
 Shared Gemini client for every skill in the plugin.
 
 Handles the three things every script needs: the google-genai dependency
-(auto-installed on first run), the API key, and readable error messages.
+(installed into a private virtual environment on first run), the API key,
+and readable error messages.
 """
 
 import importlib
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 # The Interactions API needs google-genai 2.3.0 or later.
 GENAI_PACKAGE = "google-genai>=2.3.0"
 API_KEY_URL = "https://aistudio.google.com/apikey"
+MIN_PYTHON = (3, 10)
+
+PLUGIN_ROOT = Path(__file__).resolve().parents[1]
+REQUIREMENTS = PLUGIN_ROOT / "requirements.txt"
+# Claude Code substitutes ${CLAUDE_PLUGIN_DATA} in skill text but does not
+# export it to Bash commands, so the cache directory is the usual location.
+DATA_DIR = Path(
+    os.getenv("CLAUDE_PLUGIN_DATA") or Path.home() / ".cache" / "claude-gemini-plugin"
+).expanduser()
+VENV_DIR = DATA_DIR / "venv"
+_REEXEC_MARKER = "GEMINI_PLUGIN_REEXEC"
 
 
 def fail(message, hints=None):
@@ -25,52 +38,83 @@ def fail(message, hints=None):
     sys.exit(1)
 
 
-def _pip_install(package):
-    """Install a package, trying strategies that work in externally-managed envs."""
-    for extra in (["--user"], ["--break-system-packages"], []):
-        try:
-            subprocess.run(
-                [sys.executable, "-m", "pip", "install", *extra, package],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            return True
-        except subprocess.CalledProcessError:
-            continue
-    return False
+def _venv_python():
+    if os.name == "nt":
+        return VENV_DIR / "Scripts" / "python.exe"
+    return VENV_DIR / "bin" / "python"
+
+
+def _in_venv():
+    return Path(sys.prefix).resolve() == VENV_DIR.resolve()
+
+
+def _run(cmd):
+    """Run a command, showing its output. Return True on success."""
+    return subprocess.run(cmd).returncode == 0
+
+
+def _exec_venv():
+    """Re-run the current script with the private venv's interpreter."""
+    python = _venv_python()
+    os.environ[_REEXEC_MARKER] = "1"
+    sys.stdout.flush()  # exec discards Python's buffers, so push output first.
+    sys.stderr.flush()
+    os.execv(str(python), [str(python), *sys.argv])
+
+
+def bootstrap_venv():
+    """Create the private venv, install requirements, and re-exec into it.
+
+    Never touches the system or Homebrew Python. The venv lives under
+    $CLAUDE_PLUGIN_DATA when that is set, else ~/.cache/claude-gemini-plugin.
+    """
+    if sys.version_info < MIN_PYTHON:
+        fail(f"Python {MIN_PYTHON[0]}.{MIN_PYTHON[1]} or newer is required "
+             f"(found {sys.version.split()[0]} at {sys.executable}).")
+    python = _venv_python()
+    if not python.exists():
+        print(f"First run: creating a private Python environment at {VENV_DIR} "
+              f"and installing {REQUIREMENTS.name}...")
+        VENV_DIR.parent.mkdir(parents=True, exist_ok=True)
+        if not _run([sys.executable, "-m", "venv", str(VENV_DIR)]):
+            fail(f"Could not create a virtual environment at {VENV_DIR}.",
+                 ["Your Python may lack the venv module (Debian: apt install python3-venv)"])
+        if not _run([str(python), "-m", "pip", "install", "--quiet",
+                     "-r", str(REQUIREMENTS)]):
+            fail(f"Could not install {REQUIREMENTS} into {VENV_DIR}.",
+                 ["Network or PyPI is unreachable",
+                  f"Delete {VENV_DIR} and re-run to start over"])
+    _exec_venv()
 
 
 def ensure(import_callable, package):
-    """Return the result of import_callable(), auto-installing `package` if needed.
+    """Return the result of import_callable(), installing `package` if needed.
 
-    Installs and re-imports in the same process so the user never has to re-run
-    the command after a first-time dependency install.
+    Missing packages go into the plugin's private venv, never into the
+    interpreter that launched the script. Outside the venv, a missing import
+    re-runs the script inside the venv (creating it on first run), so call this
+    before any output or API call.
     """
     try:
         return import_callable()
     except ImportError:
-        print(f"Required package '{package}' is not installed. Installing...")
-        if not _pip_install(package):
-            print(f"\nERROR: Failed to auto-install '{package}'.")
-            print("\nPlease install it manually with one of:")
-            print(f"  pip install --user '{package}'")
-            print(f"  pip install --break-system-packages '{package}'")
-            print("\nOr use a virtual environment:")
-            print("  python3 -m venv venv && source venv/bin/activate")
-            print(f"  pip install '{package}'")
-            sys.exit(1)
-        importlib.invalidate_caches()
-        try:
-            return import_callable()
-        except ImportError as e:
-            print(f"\nInstalled '{package}', but it is not importable in this "
-                  f"interpreter ({sys.executable}).")
-            print(f"Import error: {e}")
-            print("If you use a virtualenv or pyenv, install it there and re-run.")
-            print(f"If the error mentions architecture, run: "
-                  f"pip install --user --force-reinstall '{package}'")
-            sys.exit(1)
+        pass
+    if not _in_venv():
+        if os.getenv(_REEXEC_MARKER):
+            fail(f"'{package}' is still not importable after switching to {VENV_DIR}.",
+                 [f"Delete {VENV_DIR} and re-run to rebuild it"])
+        bootstrap_venv()
+    print(f"Installing '{package}' into {VENV_DIR}...")
+    if not _run([sys.executable, "-m", "pip", "install", "--quiet", package]):
+        fail(f"Could not install '{package}' into {VENV_DIR}.",
+             ["Network or PyPI is unreachable",
+              f"Install it by hand: {_venv_python()} -m pip install '{package}'"])
+    importlib.invalidate_caches()
+    try:
+        return import_callable()
+    except ImportError as e:
+        fail(f"Installed '{package}', but it is not importable in {sys.executable}: {e}",
+             [f"Delete {VENV_DIR} and re-run to rebuild it"])
 
 
 def _import_genai():
@@ -98,18 +142,28 @@ def api_key():
 
 def get_client():
     """Return a google-genai Client that supports the Interactions API."""
+    key = api_key()  # Check the key before any dependency install.
     genai, _ = genai_modules()
-    client = genai.Client(api_key=api_key())
+    client = genai.Client(api_key=key)
     if not hasattr(client, "interactions"):
         print("ERROR: The installed google-genai package is too old for this plugin.")
-        print(f"\nUpgrade it with:\n  pip install --upgrade '{GENAI_PACKAGE}'")
+        print(f"\nUpgrade it with:\n  {sys.executable} -m pip install --upgrade '{GENAI_PACKAGE}'")
         sys.exit(1)
     return client
 
 
+def _redact(text):
+    """Blank out the API key if an error message happens to include it."""
+    for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        key = os.getenv(name)
+        if key and key in text:
+            text = text.replace(key, "[redacted]")
+    return text
+
+
 def explain_error(error, model=None, fallback_hint=None):
     """Print an API error with hints matched to the message, then return None."""
-    print(f"ERROR: Request failed: {error}")
+    print(f"ERROR: Request failed: {_redact(str(error))}")
     text = str(error).lower()
     if "api key" in text or "authentication" in text or "unauthenticated" in text:
         hints = [

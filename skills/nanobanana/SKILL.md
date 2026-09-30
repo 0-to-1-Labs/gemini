@@ -4,8 +4,8 @@ description: Generate or edit photorealistic images with perfect text rendering 
 license: MIT
 metadata:
   author: sasser
-  version: 2.0.0
-allowed-tools: Bash
+  version: 2.1.0
+allowed-tools: Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/nanobanana.py *)
 argument-hint: [image description] [--aspect-ratio 16:9] [--resolution 2K] [--image ref.png]
 ---
 
@@ -98,18 +98,34 @@ Use this modular structure (plain text, no markdown):
 
 ### Step 5: Generate the Image
 
-After creating the enhanced prompt, generate the image using:
+After creating the enhanced prompt, write it to a file with the Write tool
+(use your scratchpad directory, or another temporary directory), then pass
+that file to the script:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/nanobanana.py" "ENHANCED_PROMPT_HERE"
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/nanobanana.py --prompt-file /path/to/prompt.txt
+```
+
+Never put the prompt text inside double quotes on the command line. The shell
+expands `$`, backticks, and backslashes there, so a price like `$5` or a code
+snippet in the prompt is changed or run before the script sees it. If you
+cannot write a file, pipe the prompt through a quoted heredoc instead:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/nanobanana.py - --aspect-ratio 16:9 <<'PROMPT'
+ENHANCED PROMPT HERE
+PROMPT
 ```
 
 The script will:
-1. Validate the GEMINI_API_KEY environment variable exists (auto-installing the
-   `google-genai` dependency on first run if needed)
-2. Call the Gemini Interactions API with the enhanced prompt
-3. Save the generated image (JPEG) to the current directory
-4. Print the path of the saved image
+1. Check that the GEMINI_API_KEY environment variable exists
+2. On first run, create a private virtual environment under
+   `~/.cache/claude-gemini-plugin/venv` and install `google-genai` into it
+   (it never changes the system Python; this prints one line and takes a
+   moment)
+3. Call the Gemini Interactions API with the enhanced prompt
+4. Save every generated image (JPEG) to the current directory
+5. Print the path of each saved image
 
 Cost: about $0.13 per Pro image at 1K or 2K, $0.24 at 4K. Flash is $0.07 at 1K,
 Lite is $0.03. There is no free tier for image models. Mention the price when a
@@ -121,11 +137,13 @@ Use these when the request implies a specific framing, quality, or an edit of an
 existing image:
 
 - `--aspect-ratio <ratio>` — choose framing instead of relying on the prompt
-  alone. Supported: `1:1 2:3 3:2 3:4 4:3 4:5 5:4 9:16 16:9 21:9`.
+  alone. Supported: `1:1 2:3 3:2 3:4 4:3 4:5 5:4 9:16 16:9 21:9 1:4 4:1 1:8 8:1`.
   Pick `9:16` for phone wallpapers/stories, `16:9` or `21:9` for banners/wide
-  shots, `1:1` for avatars/icons, `4:5` for portrait social posts.
-- `--resolution <1K|2K|4K>` — output resolution. Default is `1K`. Use `2K`/`4K`
-  for posters, print, or detailed infographics with fine text.
+  shots, `1:1` for avatars/icons, `4:5` for portrait social posts, `4:1` or
+  `8:1` for skinny web banners and `1:4` or `1:8` for tall side banners.
+- `--resolution <512|1K|2K|4K>` — output resolution. Default is `1K`. Use
+  `2K`/`4K` for posters, print, or detailed infographics with fine text.
+  `512` works only with `--fast`; Lite is `1K` only.
 - `--image <path>` — provide a reference/input image to **edit or combine**.
   Repeatable: pass `--image` multiple times to merge subjects, keep a character
   consistent, or transfer a style. The prompt then describes the desired change.
@@ -143,14 +161,16 @@ existing image:
 **Examples:**
 
 ```bash
-# A 9:16 phone wallpaper at 2K
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/nanobanana.py" "ENHANCED_PROMPT" --aspect-ratio 9:16 --resolution 2K
+# A 9:16 phone wallpaper at 2K (prompt written to prompt.txt first)
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/nanobanana.py --prompt-file prompt.txt --aspect-ratio 9:16 --resolution 2K
 
-# Edit an existing photo
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/nanobanana.py" "Replace the background with a snowy mountain range at golden hour, keep the subject unchanged" --image portrait.png
+# Edit an existing photo; prompt.txt says what to change, e.g. "Replace the
+# background with a snowy mountain range at golden hour, keep the subject unchanged"
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/nanobanana.py --prompt-file prompt.txt --image portrait.png
 
-# Combine two reference images
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/nanobanana.py" "Put the product from the first image onto the marble countertop from the second image, studio lighting" --image product.png --image kitchen.png
+# Combine two reference images; prompt.txt says how, e.g. "Put the product from
+# the first image onto the marble countertop from the second image, studio lighting"
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/nanobanana.py --prompt-file prompt.txt --image product.png --image kitchen.png
 ```
 
 ## Examples
@@ -172,7 +192,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/nanobanana.py" "Put the product from the 
 **User Request:** "A photo of a cyberpunk street."
 
 **Enhanced Prompt:**
-"A hyper-realistic wide shot of a rainy cyberpunk street in Tokyo at night. Neon signs reflect in the puddles. One prominent holographic sign in the foreground reads 'CYBER NOODLES' in bright pink katakana and English. Steam rises from street vents. Cinematic lighting, high contrast, 8k resolution."
+"A hyper-realistic wide shot of a rainy cyberpunk street in Tokyo at night. Neon signs reflect in the puddles. One prominent holographic sign in the foreground reads 'CYBER NOODLES' in bright pink katakana and English. Steam rises from street vents. Cinematic lighting, high contrast."
 
 ## Setup Requirements
 
@@ -182,19 +202,19 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/nanobanana.py" "Put the product from the 
    ```
    Get a key at https://aistudio.google.com/apikey
 
-2. Python 3.10 or later is required. The script auto-installs its dependency
-   (`google-genai`, and `pillow` only for `--png`) on first run.
-   To install ahead of time:
-   ```bash
-   pip install -r "${CLAUDE_PLUGIN_ROOT}/requirements.txt"
-   ```
+2. Python 3.10 or later is required. On first run the script creates a
+   private virtual environment at `~/.cache/claude-gemini-plugin/venv` (or
+   under `$CLAUDE_PLUGIN_DATA` when that variable is set) and installs
+   `google-genai` there (`pillow` too, only for `--png`). It never installs
+   into the system or Homebrew Python. To rebuild the environment, delete
+   that directory and run the script again.
 
 ## Error Handling
 
 The script handles common errors:
-- Missing GEMINI_API_KEY (exits with clear message)
+- Missing GEMINI_API_KEY (exits with clear message, before any install)
 - API failures (network issues, invalid requests)
-- Image download failures
+- Responses with no image (prints the interaction status and API errors)
 - File write permissions
 
 All errors include helpful messages for troubleshooting.
