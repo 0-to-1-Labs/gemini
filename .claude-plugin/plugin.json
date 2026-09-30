@@ -1,7 +1,7 @@
 {
   "name": "gemini",
   "displayName": "Gemini",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Google Gemini media skills for Claude Code: image generation and editing (Nano Banana Pro), video (Omni, Veo), music (Lyria), text-to-speech, and video/audio/PDF/YouTube understanding. One GEMINI_API_KEY, one skill per service.",
   "author": {
     "name": "John P. Sasser"
