@@ -1,18 +1,29 @@
 <p align="center">
-  <img src="banner.png" alt="Nanobanana" width="600">
+  <img src="banner.png" alt="Gemini plugin" width="600">
 </p>
 
-# Nanobanana
+# Gemini
 
-A Claude Code skill for generating images with Gemini 3 Pro Image (Nano Banana Pro).
+A Claude Code plugin for Google's Gemini media services. One API key, one
+skill per service:
 
-The skill automatically transforms your requests into optimized prompts that exploit Nano Banana Pro's best features: perfect text rendering, logical reasoning for infographics, and photorealistic consistency.
+| Skill | What it does | Model |
+|---|---|---|
+| `gemini:nanobanana` | Generate and edit images with perfect text rendering | `gemini-3-pro-image`, `gemini-3.1-flash-image`, `gemini-3.1-flash-lite-image` |
+| `gemini:omni` | Generate, edit, and extend 3 to 10 second videos with sound | `gemini-omni-1.1-flash` |
+| `gemini:veo` | Cinematic 4 to 8 second clips (until 2026-10-22) | `veo-3.1-*-preview` |
+| `gemini:lyria` | Compose full songs with lyrics, or instrumentals | `lyria-3.5` |
+| `gemini:tts` | Text to speech, 30 voices, two-speaker dialogue | `gemini-3.8-flash-tts` |
+| `gemini:understand` | Summarize, transcribe, or question video, audio, PDFs, YouTube | `gemini-3.8-flash`, `gemini-3.5-transcribe` |
 
-## Install (plugin marketplace)
+Each skill teaches Claude how to prompt that model well, then runs a small
+Python script that calls the Gemini API and saves the result next to your work.
+
+## Install
 
 ```
 /plugin marketplace add 0-to-1-Labs/claude-marketplace
-/plugin install nanobanana@0-to-1-labs
+/plugin install gemini@0-to-1-labs
 ```
 
 Then set your API key:
@@ -24,127 +35,126 @@ Then set your API key:
    ```
 3. Restart Claude Code
 
-### Alternative: standalone install (no marketplace)
-
-```bash
-curl -sL https://raw.githubusercontent.com/johnpsasser/nanobanana/main/install.sh | bash
-```
-
-This copies the skill into `~/.claude/skills/nanobanana`. Set your API key the
-same way as above.
+Python 3.10 or later is required. The scripts install `google-genai` on first
+run. To install ahead of time: `pip install -r requirements.txt`.
 
 ## Usage
 
-Just ask Claude Code to generate images. The skill activates automatically.
+Ask Claude Code in plain words. The right skill activates on its own, or name
+it with a slash command.
 
-**Simple:**
+**Images**
 ```
-Generate an image of a fluffy cat on a cloud
-```
-
-**Infographic:**
-```
-Create a diagram showing how an espresso machine works
-```
-
-**Poster with text:**
-```
-Make a poster for a jazz night called "Blue Moon" on Friday
-```
-
-**Portrait:**
-```
-Portrait of a woman with freckles and green eyes, wearing headphones
-```
-
-**Edit an existing image:**
-```
+Generate a poster for a jazz night called "Blue Moon" on Friday
 Take portrait.png and replace the background with a snowy mountain at golden hour
+/gemini:nanobanana a 9:16 phone wallpaper of a rainy Tokyo street at night
 ```
 
-You can also ask for a specific shape or quality ("make it a 9:16 phone
-wallpaper", "render it at 4K"), and the skill wires that to the model's aspect
-ratio and resolution controls. Add "make a quick draft" to use the faster, cheaper
-Flash model instead of Pro.
+**Video**
+```
+Make a 5 second clip of a barista pouring latte art, vertical
+Animate bottle.jpg so the camera slowly orbits it
+```
 
-## Overview
+**Music and speech**
+```
+Write a 30 second ukulele jingle about our coffee shop
+Read intro.txt aloud in a warm voice
+Make dialogue.txt into a two-voice conversation
+```
 
-Nano Banana Pro is a reasoning-based model. It does best with natural language descriptions, not keyword soup. This skill handles the translation:
+**Understanding**
+```
+Summarize meeting.mp4 in five bullets with action items
+Transcribe interview.m4a to transcript.md
+What does this YouTube video say about caching? https://www.youtube.com/watch?v=...
+```
 
-- Detects the type of image you want (infographic, typography, portrait, general)
-- Builds a structured prompt with subject, environment, specific text, style, and technical parameters
-- Adds photography or illustration details that match the request
+## Output files
 
-The model is particularly good at rendering text in images. If your image needs signage, labels, or titles, just describe what the text should say.
+Files save to the current directory (or `--output-dir`) as
+`<skill>_YYYYMMDD_HHMMSS.<ext>`:
 
-## Manual Installation
+- `nanobanana_*.jpg` (add `--png` for PNG)
+- `omni_*.mp4`, `veo_*.mp4`
+- `lyria_*.mp3` (add `--wav` for WAV)
+- `tts_*.wav`
 
-If you prefer not to run the install script:
-
-1. Create the skill directory:
-   ```bash
-   mkdir -p ~/.claude/skills/nanobanana/scripts
-   ```
-
-2. Copy the files:
-   ```bash
-   curl -sL https://raw.githubusercontent.com/johnpsasser/nanobanana/main/SKILL.md \
-     -o ~/.claude/skills/nanobanana/SKILL.md
-   curl -sL https://raw.githubusercontent.com/johnpsasser/nanobanana/main/requirements.txt \
-     -o ~/.claude/skills/nanobanana/requirements.txt
-   curl -sL https://raw.githubusercontent.com/johnpsasser/nanobanana/main/scripts/generate.py \
-     -o ~/.claude/skills/nanobanana/scripts/generate.py
-   ```
-
-3. Install the dependencies (the script also auto-installs these on first run):
-   ```bash
-   pip install google-genai pillow
-   ```
-
-4. Set your API key (see above)
-
-5. Restart Claude Code
-
-## How It Works
-
-1. You describe what you want
-2. The skill analyzes your request and picks a pattern (infographic, typography, character, or general)
-3. It builds an enhanced prompt with all the details Nano Banana Pro needs
-4. The image generates and saves to your current directory
-
-Images are saved as `nanobanana_YYYYMMDD_HHMMSS.png` in your current directory.
-
-By default it uses **Nano Banana Pro** (`gemini-3-pro-image`) for the best text
-rendering and fidelity. Quick drafts can use the faster, cheaper Flash model
-(`gemini-3.1-flash-image`). All generated images carry an invisible
+All generated media carries an invisible
 [SynthID](https://deepmind.google/technologies/synthid/) watermark.
+
+## Cost
+
+Image, video, and music models have no free tier. TTS and understanding do.
+Typical prices (check [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)):
+
+| Skill | Price |
+|---|---|
+| Image | $0.03 (Lite) to $0.24 (Pro 4K) per image |
+| Omni video | about $0.10 per second at 720p |
+| Veo video | $0.05 to $0.60 per second by model and resolution |
+| Music | $0.08 per song |
+| Speech | about $0.05 per minute |
+| Understanding | token rates; a 10 minute video is under $0.05 |
+
+Each skill tells Claude to state the cost before an expensive run.
+
+## Model overrides
+
+Every script takes `--model <id>`. Environment variables change the defaults
+without an edit: `GEMINI_OMNI_MODEL`, `GEMINI_VEO_MODEL`, `GEMINI_LYRIA_MODEL`,
+`GEMINI_TTS_MODEL`, `GEMINI_UNDERSTAND_MODEL`.
+
+## Veo sunset
+
+Google shuts down all Veo 3.1 models on 2026-10-22 and names Omni as the
+replacement. `gemini:veo` runs until then, prints the days left, and refuses
+after. A later release removes it.
+
+## Migrating from nanobanana
+
+Version 2.0.0 renames the plugin from `nanobanana` to `gemini`.
+
+- The skill `nanobanana:nanobanana` is now `gemini:nanobanana`. Its prompts,
+  flags, and behavior are the same. New flags: `--lite`, `--thinking high`,
+  `--png`.
+- Images save as JPEG, the model's native format. The 1.x plugin re-encoded the
+  same JPEG as PNG. Pass `--png` for that behavior.
+- The marketplace maps the old name to the new one, and `/plugin` marks the
+  old install as renamed. Finish the move by hand:
+  ```
+  /plugin marketplace update 0-to-1-labs
+  /plugin install gemini@0-to-1-labs
+  ```
+  If `nanobanana@0-to-1-labs` still shows in `/plugin` afterwards, uninstall it.
+- The standalone `install.sh` is gone. Use the marketplace.
 
 ## Troubleshooting
 
-**"GEMINI_API_KEY not set"**
+**"GEMINI_API_KEY not set"** — export it in your shell and restart Claude Code.
+`GOOGLE_API_KEY` also works.
 
-Make sure it's exported in your shell. Check with `echo $GEMINI_API_KEY`. If it's empty, add it to your `.zshrc` or `.bashrc` and restart your terminal.
+**"google-genai not installed" or too old** — the scripts need
+`google-genai>=2.3.0`. Install it with
+`pip install --user --upgrade google-genai` (add `--break-system-packages` on
+Homebrew Python).
 
-**"google-genai not installed"**
+**"incompatible architecture" on import** — a package was built for another
+CPU. Reinstall it: `pip install --user --force-reinstall <package>`.
 
-The skill tries to auto-install it (and `pillow`, used for image editing) on first
-run. If that fails — usually because of multiple Python versions or an
-externally-managed environment — install manually with one of:
-
-```bash
-pip install --user google-genai pillow
-pip install --break-system-packages google-genai pillow
-```
-
-**API errors**
-
-Check that your key is valid at [Google AI Studio](https://aistudio.google.com/apikey). Free tier has usage limits.
+**API errors** — check the key at [Google AI Studio](https://aistudio.google.com/apikey).
+Image, video, and music calls fail on a key without billing.
 
 ## Links
 
-- [Gemini API Image Generation Docs](https://ai.google.dev/gemini-api/docs/image-generation)
-- [Nano Banana Pro Documentation](https://ai.google.dev/gemini-api/docs/nanobanana)
-- [Nano Banana Hackathon Kit](https://github.com/google-gemini/nano-banana-hackathon-kit)
+- [Gemini API docs](https://ai.google.dev/gemini-api/docs)
+- [Image generation](https://ai.google.dev/gemini-api/docs/image-generation)
+- [Omni video](https://ai.google.dev/gemini-api/docs/omni)
+- [Veo](https://ai.google.dev/gemini-api/docs/veo)
+- [Lyria](https://ai.google.dev/gemini-api/docs/music-generation)
+- [Speech](https://ai.google.dev/gemini-api/docs/speech-generation)
+- [Video understanding](https://ai.google.dev/gemini-api/docs/video-understanding)
+- [Deprecations](https://ai.google.dev/gemini-api/docs/deprecations)
 
 ## License
 

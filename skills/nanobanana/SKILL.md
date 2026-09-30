@@ -1,11 +1,12 @@
 ---
 name: nanobanana
-description: Generate or edit photorealistic images with perfect text rendering using Nano Banana Pro (Gemini 3 Pro Image). Automatically enhances prompts for this reasoning-based model and supports aspect ratio, resolution, and reference-image editing. Use when users ask to create or edit images, logos, infographics, posters, diagrams, wallpapers, or any visual content.
+description: Generate or edit photorealistic images with perfect text rendering using Nano Banana Pro (Gemini 3 Pro Image) or Nano Banana 2. Automatically enhances prompts for this reasoning-based model and supports aspect ratio, resolution, and reference-image editing. Use when users ask to create or edit images, logos, infographics, posters, diagrams, wallpapers, or any still visual content. For video use gemini:omni.
 license: MIT
 metadata:
   author: sasser
-  version: 1.0.0
+  version: 2.0.0
 allowed-tools: Bash
+argument-hint: [image description] [--aspect-ratio 16:9] [--resolution 2K] [--image ref.png]
 ---
 
 # Nano Banana Pro Image Generation
@@ -100,21 +101,19 @@ Use this modular structure (plain text, no markdown):
 After creating the enhanced prompt, generate the image using:
 
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/scripts/generate.py" "ENHANCED_PROMPT_HERE"
-```
-
-If the path above is not resolved (standalone skill install), use the absolute path:
-
-```bash
-python ~/.claude/skills/nanobanana/scripts/generate.py "ENHANCED_PROMPT_HERE"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/nanobanana.py" "ENHANCED_PROMPT_HERE"
 ```
 
 The script will:
 1. Validate the GEMINI_API_KEY environment variable exists (auto-installing the
    `google-genai` dependency on first run if needed)
-2. Call the Gemini API with the enhanced prompt
-3. Save the generated image to the current directory
-4. Print the filename of the saved image
+2. Call the Gemini Interactions API with the enhanced prompt
+3. Save the generated image (JPEG) to the current directory
+4. Print the path of the saved image
+
+Cost: about $0.13 per Pro image at 1K or 2K, $0.24 at 4K. Flash is $0.07 at 1K,
+Lite is $0.03. There is no free tier for image models. Mention the price when a
+user asks for many images or 4K.
 
 #### Optional flags
 
@@ -130,20 +129,28 @@ existing image:
 - `--image <path>` — provide a reference/input image to **edit or combine**.
   Repeatable: pass `--image` multiple times to merge subjects, keep a character
   consistent, or transfer a style. The prompt then describes the desired change.
-- `--fast` — use the faster, cheaper Flash model for quick drafts/iteration.
-  Default (omit it) uses Nano Banana Pro for best text and fidelity.
+- `--fast` — use the faster, cheaper Flash model (Nano Banana 2) for quick
+  drafts/iteration. Default (omit it) uses Nano Banana Pro for best text and
+  fidelity.
+- `--lite` — use the cheapest Lite model. 1K only. Good for icons and thumbnails.
+- `--thinking high` — Flash models only. Use for complex scenes with many
+  elements or tricky spatial logic.
+- `--png` — re-encode the output as PNG for tools that require `.png`. The
+  model itself emits JPEG.
+- `--output-dir <dir>` — save somewhere other than the current directory.
+- `--model <id>` — explicit model ID when the user names one.
 
 **Examples:**
 
 ```bash
 # A 9:16 phone wallpaper at 2K
-python "${CLAUDE_PLUGIN_ROOT}/scripts/generate.py" "ENHANCED_PROMPT" --aspect-ratio 9:16 --resolution 2K
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/nanobanana.py" "ENHANCED_PROMPT" --aspect-ratio 9:16 --resolution 2K
 
 # Edit an existing photo
-python "${CLAUDE_PLUGIN_ROOT}/scripts/generate.py" "Replace the background with a snowy mountain range at golden hour, keep the subject unchanged" --image portrait.png
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/nanobanana.py" "Replace the background with a snowy mountain range at golden hour, keep the subject unchanged" --image portrait.png
 
 # Combine two reference images
-python "${CLAUDE_PLUGIN_ROOT}/scripts/generate.py" "Put the product from the first image onto the marble countertop from the second image, studio lighting" --image product.png --image kitchen.png
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/nanobanana.py" "Put the product from the first image onto the marble countertop from the second image, studio lighting" --image product.png --image kitchen.png
 ```
 
 ## Examples
@@ -175,9 +182,9 @@ python "${CLAUDE_PLUGIN_ROOT}/scripts/generate.py" "Put the product from the fir
    ```
    Get a key at https://aistudio.google.com/apikey
 
-2. Python 3 is required. The script auto-installs its dependencies
-   (`google-genai`, and `pillow` when editing reference images) on first run.
-   To install them ahead of time:
+2. Python 3.10 or later is required. The script auto-installs its dependency
+   (`google-genai`, and `pillow` only for `--png`) on first run.
+   To install ahead of time:
    ```bash
    pip install -r "${CLAUDE_PLUGIN_ROOT}/requirements.txt"
    ```

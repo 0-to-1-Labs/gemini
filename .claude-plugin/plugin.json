@@ -1,21 +1,26 @@
 {
-  "name": "nanobanana",
-  "displayName": "Nano Banana Pro",
-  "version": "1.0.1",
-  "description": "Generate and edit photorealistic images with perfect text rendering using Nano Banana Pro (Gemini 3 Pro Image). Auto-enhances prompts and supports aspect ratio, resolution, and reference-image editing.",
+  "name": "gemini",
+  "displayName": "Gemini",
+  "version": "2.0.0",
+  "description": "Google Gemini media skills for Claude Code: image generation and editing (Nano Banana Pro), video (Omni, Veo), music (Lyria), text-to-speech, and video/audio/PDF/YouTube understanding. One GEMINI_API_KEY, one skill per service.",
   "author": {
     "name": "John P. Sasser"
   },
-  "homepage": "https://github.com/johnpsasser/nanobanana",
-  "repository": "https://github.com/johnpsasser/nanobanana",
+  "homepage": "https://github.com/0-to-1-Labs/gemini",
+  "repository": "https://github.com/0-to-1-Labs/gemini",
   "license": "MIT",
   "keywords": [
+    "gemini",
     "image-generation",
     "image-editing",
-    "gemini",
     "nano-banana",
-    "text-to-image",
-    "infographics",
-    "posters"
+    "video-generation",
+    "omni",
+    "veo",
+    "music-generation",
+    "lyria",
+    "text-to-speech",
+    "transcription",
+    "video-understanding"
   ]
 }
